@@ -1,0 +1,91 @@
+lessons learned
+
+1. It is allowed to redefine a variable with same name, e.g.:
+
+let size = ...;
+......
+.....
+let size = ...;
+
+- or -
+
+fn bar(size: u8) {
+    ......
+    .....
+    let size = ...;
+    ......
+}
+
+2. A clever way to take a value which is 'at-most' x but not less than y is to use the math function 'min': x.min(y), instead of this expression snippet:
+
+let result = if x < y {
+    x
+} else {
+    y
+}
+
+which is basically same as 'min'.
+
+3. Andrey's solution casts everywhere between numbers .... which is safe when on widening conversions, e.g. u8 -> u32, but is dangerous on narrowing conversions, like the same in opposite way. I would not reccomend narrowing conversions to be done casting with 'as' because that would silently change the value. It is better to panic by doing try_into(), than to trim a value that is > 2^8 when casting to u8.
+
+4. We could have used 'slice.split_at' function instead of manually creating the two slices &source[..payload_usize] and &source[payload_usize..]
+
+5. Instead of pushing an array byte-by-byte to a vector:
+let checksum: u32 = ....;
+let bytes = checksum.to_be_bytes();
+for byte in bytes.iter() {
+    output.push(*byte);
+}
+
+we could have used again 'vec' function extend_from_slice:
+
+let checksum: u32 = ....;
+let bytes = checksum.to_be_bytes();
+output.extend_from_slice(&bytes);
+
+so here '&' takes a slice to the array (the value of 'bytes')
+
+6. Andrey's solution duplicates code to calculate checksum
+
+7. Andrey's solution use numbers throughout the code, e.g. '4' at 'deserialize' with no description what they are
+
+8. Andrey's solution have two extra and unnecessary data mambers in Packet: size and checksum. That is error prone. It is easy to break their invariant, e.g. size == payload.len() and checksum == calc_checksum(payload). Obtaining their values is not expensive so they are not recommended to be stored as data members.
+
+9. Use of &[].split_* family of functions.
+
+10. Use of the macro '?' to unwrap the result or propagate the error: https://doc.rust-lang.org/std/macro.try.html
+
+11. Use of Option::ok_or_else() and Result::map_err() to prepare the required error. A negative in how they are used is that the cause error is suppressed and not propagated up.
+
+12. Assign returned tuple to two variables:
+
+let (packet, remainder) = Packet::from_source(....);
+//here use packet and remainder
+
+-instead of-
+
+let compound_tuple = Packet::from_source(....);
+//use compound_tuple.0 and compound_tuple.1 as packet and remainder respectively
+
+13. When creating a new instance of a struct and the initial values for member variables are bound to variables with same names then they may be skipped, e.g.:
+struct Point {
+    x: u8,
+    y: u8,
+    z: u8,
+}
+let x, y, z = (1,2,3);
+
+Point(x, y, z)
+//instead of
+Point(x: x, y: y, z: z)
+
+14. When working with Iterator-s prefer using its methods to work over its elements than using loops externally. For example:
+
+//Rather than looping and collecting bytes this way:
+let mut output: Vec<u8> = Vec::with_capacity(packet_usize); // TODO calculate capacity
+for packet in self.to_packets(packet_size) {
+    output.append(&mut packet.serialize());
+}
+
+//use this
+self.to_packets(packet_size).into_iter().flat_map(|packet| packet.serialize()).collect()
